@@ -464,6 +464,17 @@ input, select, textarea {
   color: var(--text-muted);
 }
 
+.guest-pill-badge {
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent-primary);
+  background: var(--accent-subtle);
+  border: 1px solid var(--accent-border);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
 /* ==========================================================================
    MAIN VIEWPORT & TOPBAR
    ========================================================================== */

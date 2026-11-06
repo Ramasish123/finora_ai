@@ -1,7 +1,7 @@
 export const DEFAULT_PERSONAL_INPUTS = {
   // Identity & Demographics
-  fullName: "Sayan Das",
-  email: "sayan@finora.ai",
+  fullName: "Guest",
+  email: "guest@finora.ai",
   age: 26,
   targetRetirementAge: 55,
   occupation: "Software Engineer",

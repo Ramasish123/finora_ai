@@ -355,7 +355,7 @@ function App() {
     {
       id: 1,
       sender: "ai",
-      text: "Hello Sayan! I'm FINORA AI, your autonomous financial co-pilot.\n\nI've analyzed your real-time liquidity, cash flow velocity, and budget margins. Your Financial Health Score is 82/100 (Strong Tier). How can I assist your wealth strategy today?",
+      text: "Hello! I'm FINORA AI, your autonomous financial co-pilot.\n\nI've analyzed your real-time liquidity, cash flow velocity, and budget margins. Your Financial Health Score is 82/100 (Strong Tier). How can I assist your wealth strategy today?",
       timestamp: "Just now"
     }
   ]);
@@ -367,7 +367,17 @@ function App() {
   const [personalInputs, setPersonalInputs] = useState(() => {
     try {
       const saved = localStorage.getItem("finora_personal_inputs");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Omit legacy "Sayan Das" if present in cached browser localStorage
+        if (parsed.fullName === "Sayan Das" || !parsed.fullName) {
+          parsed.fullName = "Guest";
+        }
+        if (parsed.email === "sayan@finora.ai" || !parsed.email) {
+          parsed.email = "guest@finora.ai";
+        }
+        return parsed;
+      }
     } catch {
       // fallback
     }
@@ -375,8 +385,14 @@ function App() {
   });
 
   // Settings State
-  const [userName, setUserName] = useState(() => personalInputs.fullName || "Sayan Das");
-  const [userEmail, setUserEmail] = useState(() => personalInputs.email || "sayan@finora.ai");
+  const [userName, setUserName] = useState(() => {
+    if (!personalInputs.fullName || personalInputs.fullName === "Sayan Das") return "Guest";
+    return personalInputs.fullName;
+  });
+  const [userEmail, setUserEmail] = useState(() => {
+    if (!personalInputs.email || personalInputs.email === "sayan@finora.ai") return "guest@finora.ai";
+    return personalInputs.email;
+  });
   const [budgetAlerts, setBudgetAlerts] = useState(true);
   const [aiSuggestions, setAiSuggestions] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(true);
@@ -384,9 +400,9 @@ function App() {
 
   // Derived user initials for avatars
   const userInitials = useMemo(() => {
-    if (!userName) return "U";
+    if (!userName || userName.toLowerCase() === "guest") return "G";
     const parts = userName.trim().split(" ").filter(Boolean);
-    if (parts.length === 0) return "U";
+    if (parts.length === 0) return "G";
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }, [userName]);
@@ -976,7 +992,12 @@ function App() {
               <div className="avatar-online-dot" />
             </div>
             <div className="profile-info">
-              <strong>{userName}</strong>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <strong>{userName}</strong>
+                {userName.toLowerCase() === "guest" && (
+                  <span className="guest-pill-badge">GUEST</span>
+                )}
+              </div>
               <small>{userEmail}</small>
             </div>
           </div>

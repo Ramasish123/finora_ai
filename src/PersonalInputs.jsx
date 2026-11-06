@@ -409,7 +409,7 @@ export default function PersonalInputs({
                 <label>Full Legal / Display Name</label>
                 <input
                   type="text"
-                  placeholder="e.g. Sayan Das"
+                  placeholder="e.g. Guest or your name"
                   value={inputs.fullName}
                   onChange={(e) => handleChange("fullName", e.target.value)}
                 />
