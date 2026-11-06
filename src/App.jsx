@@ -54,6 +54,8 @@ import {
 } from "recharts";
 
 import "./App.css";
+import PersonalInputs from "./PersonalInputs";
+import { DEFAULT_PERSONAL_INPUTS } from "./personalInputsData";
 
 // Dynamic chart datasets for different time ranges
 const chartDataSets = {
@@ -361,13 +363,33 @@ function App() {
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
 
+  // Personal Inputs State (User's Own Financial Telemetry)
+  const [personalInputs, setPersonalInputs] = useState(() => {
+    try {
+      const saved = localStorage.getItem("finora_personal_inputs");
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return DEFAULT_PERSONAL_INPUTS;
+  });
+
   // Settings State
-  const [userName, setUserName] = useState("Sayan Das");
-  const [userEmail, setUserEmail] = useState("sayan@finora.ai");
+  const [userName, setUserName] = useState(() => personalInputs.fullName || "Sayan Das");
+  const [userEmail, setUserEmail] = useState(() => personalInputs.email || "sayan@finora.ai");
   const [budgetAlerts, setBudgetAlerts] = useState(true);
   const [aiSuggestions, setAiSuggestions] = useState(true);
   const [weeklyReports, setWeeklyReports] = useState(true);
   const [autoSweep, setAutoSweep] = useState(false);
+
+  // Derived user initials for avatars
+  const userInitials = useMemo(() => {
+    if (!userName) return "U";
+    const parts = userName.trim().split(" ").filter(Boolean);
+    if (parts.length === 0) return "U";
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  }, [userName]);
 
   // Calculation helpers
   const totalIncome = useMemo(
@@ -388,9 +410,141 @@ function App() {
     [transactions]
   );
 
-  const baseSavings = 58000;
+  const [baseSavings, setBaseSavings] = useState(() => {
+    const liquid = Number(personalInputs.liquidSavings) || 0;
+    const emergency = Number(personalInputs.emergencyFundCurrent) || 0;
+    return liquid + emergency > 0 ? liquid + emergency : 58000;
+  });
+
   const netSavings = totalIncome - totalExpenses;
   const totalBalance = baseSavings + netSavings;
+
+  // Synchronization handler when user clicks "Apply & Sync" in Personal Inputs
+  const handleApplyPersonalInputs = (updatedInputs, stats) => {
+    setPersonalInputs(updatedInputs);
+    if (updatedInputs.fullName) setUserName(updatedInputs.fullName);
+    if (updatedInputs.email) setUserEmail(updatedInputs.email);
+
+    const newBase =
+      (Number(updatedInputs.liquidSavings) || 0) +
+      (Number(updatedInputs.emergencyFundCurrent) || 0);
+    setBaseSavings(newBase > 0 ? newBase : 58000);
+
+    // Sync realistic ledger based on user's own numbers
+    const newTxList = [
+      {
+        id: Date.now() - 1,
+        name: `Primary Take-Home (${updatedInputs.occupation || "Salary"})`,
+        category: "Income",
+        date: "Today, 09:00 AM",
+        amount: Number(updatedInputs.primaryIncome) || 65000,
+        iconName: "Wallet",
+        paymentMethod: "Direct Deposit"
+      },
+      ...(Number(updatedInputs.secondaryIncome) > 0
+        ? [
+            {
+              id: Date.now() - 2,
+              name: "Secondary Inflow / Freelance",
+              category: "Income",
+              date: "Yesterday, 03:00 PM",
+              amount: Number(updatedInputs.secondaryIncome),
+              iconName: "Wallet",
+              paymentMethod: "Wire Transfer"
+            }
+          ]
+        : []),
+      {
+        id: Date.now() - 3,
+        name: "Housing & Rent / Mortgage",
+        category: "Housing",
+        date: "01 Nov, 10:00 AM",
+        amount: -(Number(updatedInputs.housingRent) || 15000),
+        iconName: "Home",
+        paymentMethod: "Bank Transfer"
+      },
+      {
+        id: Date.now() - 4,
+        name: "Groceries & Dining Baseline",
+        category: "Food & Drinks",
+        date: "02 Nov, 06:30 PM",
+        amount: -(Number(updatedInputs.groceriesDining) || 8450),
+        iconName: "Coffee",
+        paymentMethod: "UPI / Card"
+      },
+      {
+        id: Date.now() - 5,
+        name: "Utilities & Bills",
+        category: "Utilities",
+        date: "03 Nov, 11:15 AM",
+        amount: -(Number(updatedInputs.utilitiesBills) || 3500),
+        iconName: "CreditCard",
+        paymentMethod: "Auto-Debit"
+      },
+      ...(Number(updatedInputs.shoppingDiscretionary) > 0
+        ? [
+            {
+              id: Date.now() - 6,
+              name: "Shopping & Retail Discretionary",
+              category: "Shopping",
+              date: "04 Nov, 05:20 PM",
+              amount: -Number(updatedInputs.shoppingDiscretionary),
+              iconName: "ShoppingBag",
+              paymentMethod: "Credit Card"
+            }
+          ]
+        : [])
+    ];
+    setTransactions(newTxList);
+
+    // Sync category budgets
+    setBudgets([
+      {
+        id: 1,
+        category: "Housing & Rent",
+        limit: Math.max(Math.round(Number(updatedInputs.housingRent) * 1.1), 1000),
+        spent: Number(updatedInputs.housingRent),
+        color: "#60a5fa"
+      },
+      {
+        id: 2,
+        category: "Food & Dining",
+        limit: Math.max(Math.round(Number(updatedInputs.groceriesDining) * 1.25), 1000),
+        spent: Number(updatedInputs.groceriesDining),
+        color: "#10b981"
+      },
+      {
+        id: 3,
+        category: "Shopping & Retail",
+        limit: Math.max(Math.round(Number(updatedInputs.shoppingDiscretionary) * 1.3), 1000),
+        spent: Number(updatedInputs.shoppingDiscretionary),
+        color: "#a855f7"
+      },
+      {
+        id: 4,
+        category: "Utilities & Bills",
+        limit: Math.max(Math.round(Number(updatedInputs.utilitiesBills) * 1.2), 1000),
+        spent: Number(updatedInputs.utilitiesBills),
+        color: "#f59e0b"
+      },
+      {
+        id: 5,
+        category: "Entertainment",
+        limit: Math.max(Math.round(Number(updatedInputs.subscriptionsEntertainment) * 1.3), 1000),
+        spent: Number(updatedInputs.subscriptionsEntertainment),
+        color: "#ec4899"
+      }
+    ]);
+
+    // Push synchronization message to AI chat
+    const syncMsg = {
+      id: Date.now() + 5,
+      sender: "ai",
+      text: `🔄 **Personal Financial Profile Synced!**\n\nI have recalibrated your entire workspace with your personal inputs:\n• **Monthly Take-Home**: ${currency}${(stats.totalInflow).toLocaleString("en-IN")}\n• **Fixed Commitments**: ${currency}${(stats.totalOutflow).toLocaleString("en-IN")}\n• **Monthly Free Surplus**: ${currency}${(stats.netSurplus).toLocaleString("en-IN")} (${stats.savingsRate}% Savings Rate)\n• **Resilience Score**: ${stats.healthScore}/100 (${stats.tier})\n• **Emergency Runway**: ${stats.runwayMonths} months\n• **Directives**: ${updatedInputs.customDirectives || "Standard prudent allocation"}\n\nYour dashboard and budgets are now reflecting your personal numbers.`,
+      timestamp: "Just now"
+    };
+    setMessages((prev) => [...prev, syncMsg]);
+  };
 
   // Currency Formatter
   const formatMoney = (val, round = true) => {
@@ -552,16 +706,68 @@ function App() {
       let aiResponse = "";
       const lower = query.toLowerCase();
 
-      if (lower.includes("save") || lower.includes("saving") || lower.includes("10,000") || lower.includes("10000")) {
-        aiResponse = `Here is your autonomous blueprint to save an extra ${currency}10,000 this month:\n\n• **Food & Dining**: Trim discretionary dining by 20% (approx. ${currency}1,700 saved).\n• **Shopping**: Delay non-essential electronics purchases (approx. ${currency}3,500 saved).\n• **Auto-Sweep**: Divert 15% of upcoming freelance payments (${currency}4,800) into your Emergency Fund on receipt.\n\nProjected Annual Yield: +${currency}1,20,000 in surplus reserves.`;
-      } else if (lower.includes("budget") || lower.includes("spend") || lower.includes("expense")) {
-        aiResponse = `Your total monthly outflow is ${formatMoney(totalExpenses)}. \n\nHighest allocations:\n1. Housing: ${formatMoney(15000)} (100% fixed)\n2. Food & Dining: ${formatMoney(8450)} (70% of safety cap)\n3. Shopping: ${formatMoney(6200)} (77% of safety cap)\n\nOverall status: Safe Zone with a ${currency}4,200 projected surplus.`;
+      const userInflow =
+        (Number(personalInputs.primaryIncome) || 0) +
+        (Number(personalInputs.secondaryIncome) || 0) +
+        (Number(personalInputs.passiveIncome) || 0);
+
+      const userCommitments =
+        (Number(personalInputs.housingRent) || 0) +
+        (Number(personalInputs.groceriesDining) || 0) +
+        (Number(personalInputs.utilitiesBills) || 0) +
+        (Number(personalInputs.transportCommute) || 0) +
+        (Number(personalInputs.healthcareInsurance) || 0) +
+        (Number(personalInputs.subscriptionsEntertainment) || 0) +
+        (Number(personalInputs.shoppingDiscretionary) || 0) +
+        (Number(personalInputs.debtLoanEmi) || 0) +
+        (Number(personalInputs.otherCommitments) || 0);
+
+      const userSurplus = userInflow - userCommitments;
+      const userSavingsRate =
+        userInflow > 0 ? Math.round((userSurplus / userInflow) * 100) : 0;
+
+      const userReserves =
+        (Number(personalInputs.liquidSavings) || 0) +
+        (Number(personalInputs.emergencyFundCurrent) || 0);
+
+      const userRunway =
+        userCommitments > 0 ? (userReserves / userCommitments).toFixed(1) : "6.0";
+
+      const directiveSnippet = personalInputs.customDirectives
+        ? `\n\n📌 **Your Stated Directive**: "${personalInputs.customDirectives}"`
+        : "";
+
+      if (
+        lower.includes("input") ||
+        lower.includes("profile") ||
+        lower.includes("my data") ||
+        lower.includes("personal") ||
+        lower.includes("telemetry")
+      ) {
+        aiResponse = `Here is your active Personal Financial Profile telemetry:\n\n• **User**: ${personalInputs.fullName || userName} (${personalInputs.occupation || "Professional"}, ${personalInputs.age || 26} yrs)\n• **Employment**: ${personalInputs.employmentType}\n• **Total Monthly Inflow**: ${formatMoney(userInflow)}/mo\n• **Monthly Fixed Commitments**: ${formatMoney(userCommitments)}/mo\n• **Free Monthly Surplus**: ${formatMoney(userSurplus)}/mo (${userSavingsRate}% Savings Rate)\n• **Emergency Runway**: ${userRunway} months\n• **Risk Tolerance**: ${personalInputs.riskTolerance} Tier\n• **Primary Objective**: ${personalInputs.primaryGoal}${directiveSnippet}\n\nYou can refine these anytime in the **Personal Inputs** tab!`;
+      } else if (
+        lower.includes("save") ||
+        lower.includes("saving") ||
+        lower.includes("10,000") ||
+        lower.includes("10000")
+      ) {
+        aiResponse = `Here is your customized strategy based on your personal inputs (${personalInputs.occupation || "Professional"} profile):\n\n• **Food & Dining**: Trim discretionary dining by 20% (approx. ${formatMoney(Math.round(personalInputs.groceriesDining * 0.2))} saved).\n• **Shopping**: Cap retail discretionary spend at ${formatMoney(Math.round(personalInputs.shoppingDiscretionary * 0.8))}.\n• **Target Allocation**: Direct ${personalInputs.targetSavingsRate}% of monthly surplus (${formatMoney(Math.round(userInflow * (personalInputs.targetSavingsRate / 100)))}) towards "${personalInputs.primaryGoal}".\n\nProjected Annual Surplus: ${formatMoney(userSurplus * 12)}.${directiveSnippet}`;
+      } else if (
+        lower.includes("budget") ||
+        lower.includes("spend") ||
+        lower.includes("expense")
+      ) {
+        aiResponse = `Your total monthly outflow based on your personal ledger is ${formatMoney(totalExpenses)}. \n\nHighest allocations:\n1. Housing: ${formatMoney(personalInputs.housingRent)} (Fixed)\n2. Food & Dining: ${formatMoney(personalInputs.groceriesDining)} (Pacing controlled)\n3. Utilities & Bills: ${formatMoney(personalInputs.utilitiesBills)}\n\nOverall status: Safe Zone with ${formatMoney(userSurplus)} monthly surplus buffer.`;
       } else if (lower.includes("health") || lower.includes("score")) {
-        aiResponse = `Your Financial Health Score is **82/100 (Prime Tier)**.\n\n• Savings Rate: 92% (Top Decile)\n• Debt-to-Income: 0% (Outstanding)\n• Budget Variance: 84% (Controlled)\n• Emergency Runway: 4.8 months\n\nRecommendation: Fund 1.2 more months of runway to hit the 6-month resilience standard.`;
-      } else if (lower.includes("goal") || lower.includes("emergency") || lower.includes("vacation")) {
-        aiResponse = `You have 4 active wealth milestones.\n\n• **Emergency Fund**: 65% (${formatMoney(98000)} / ${formatMoney(150000)})\n• **M3 MacBook Pro**: 68% (${formatMoney(54000)} / ${formatMoney(80000)})\n• **Bali Retreat**: 62% (${formatMoney(31000)} / ${formatMoney(50000)})\n\nAt your current velocity of +${currency}18,000/mo, your Emergency Fund completes in under 75 days!`;
+        aiResponse = `Your Financial Health Score is evaluated using your real personal telemetry.\n\n• Savings Rate: ${userSavingsRate}% (Target: ${personalInputs.targetSavingsRate}%)\n• Debt-to-Income: ${personalInputs.debtLoanEmi > 0 ? formatMoney(personalInputs.debtLoanEmi) : "0% (Outstanding)"}\n• Emergency Runway: ${userRunway} months (Target: ${personalInputs.targetEmergencyMonths} months)\n• Risk Appetite: ${personalInputs.riskTolerance}\n\nRecommendation: Continue funding reserves until reaching ${personalInputs.targetEmergencyMonths || 6} full months of living expenses.`;
+      } else if (
+        lower.includes("goal") ||
+        lower.includes("emergency") ||
+        lower.includes("vacation")
+      ) {
+        aiResponse = `Milestone tracking is aligned with your primary goal: **"${personalInputs.primaryGoal}"**.\n\n• Liquid Savings: ${formatMoney(personalInputs.liquidSavings)}\n• Dedicated Emergency Fund: ${formatMoney(personalInputs.emergencyFundCurrent)}\n• Investments & Equities: ${formatMoney(personalInputs.investmentsStocksMutual)}\n\nAt your current surplus pace of ${formatMoney(userSurplus)}/mo, your targets are on track!`;
       } else {
-        aiResponse = `Portfolio scan complete.\n\nTotal Net Worth: ${formatMoney(totalBalance)}\nMonthly Surplus: ${formatMoney(netSavings)}\nDiscretionary Outflow: 22% (Safe)\n\nYour portfolio is outperforming 85% of peers in your income bracket. Would you like me to simulate an automated investment sweep?`;
+        aiResponse = `Portfolio scan complete for ${personalInputs.fullName || userName}.\n\nTotal Net Worth: ${formatMoney(totalBalance)}\nMonthly Inflow: ${formatMoney(userInflow)}\nMonthly Outflow: ${formatMoney(userCommitments)}\nNet Monthly Surplus: ${formatMoney(userSurplus)}\n\nRisk Model: ${personalInputs.riskTolerance} Tier. Would you like me to simulate an automated investment sweep based on your personal inputs?`;
       }
 
       setMessages((prev) => [
@@ -634,6 +840,7 @@ function App() {
 
   const menu = [
     { name: "Dashboard", icon: LayoutDashboard },
+    { name: "Personal Inputs", icon: SlidersHorizontal, badge: "MY DATA" },
     { name: "Transactions", icon: ArrowLeftRight },
     { name: "Budget Planner", icon: Wallet },
     { name: "Analytics", icon: ChartNoAxesCombined },
@@ -725,6 +932,9 @@ function App() {
                 {item.name === "AI Assistant" && (
                   <span className="nav-badge-ai">LIVE</span>
                 )}
+                {item.badge && (
+                  <span className="nav-badge-ai">{item.badge}</span>
+                )}
                 {isActive && <div className="nav-active-glow" />}
               </button>
             );
@@ -762,7 +972,7 @@ function App() {
 
           <div className="profile-card">
             <div className="avatar-wrapper">
-              <div className="avatar">SD</div>
+              <div className="avatar">{userInitials}</div>
               <div className="avatar-online-dot" />
             </div>
             <div className="profile-info">
@@ -908,7 +1118,7 @@ function App() {
               title={userName}
               onClick={() => handleNavClick("Settings")}
             >
-              SD
+              {userInitials}
             </div>
           </div>
         </header>
@@ -923,18 +1133,30 @@ function App() {
               <div className="welcome-text">
                 <div className="greeting-row">
                   <h2>Good morning, {userName.split(" ")[0]} 👋</h2>
-                  <span className="portfolio-pulse-pill">
+                  <span
+                    className="portfolio-pulse-pill"
+                    style={{ cursor: "pointer" }}
+                    onClick={() => handleNavClick("Personal Inputs")}
+                    title="Click to view and edit your personal inputs"
+                  >
                     <span className="pulse-indicator" />
-                    Portfolio Health: 82/100 · Prime
+                    Personal Telemetry: {personalInputs.occupation || "Active"} · {personalInputs.riskTolerance}
                   </span>
                 </div>
                 <p>
-                  Your cash flow is trending positive. You have saved an extra 18.4%
-                  compared to last month.
+                  Cash flow and resilience metrics personalized for {userName} ({personalInputs.occupation || "Portfolio"}).
                 </p>
               </div>
 
               <div className="welcome-actions">
+                <button
+                  className="secondary-btn"
+                  onClick={() => handleNavClick("Personal Inputs")}
+                  title="Configure your own income, expenses, and personal goals"
+                >
+                  <SlidersHorizontal size={16} />
+                  <span>Personal Inputs</span>
+                </button>
                 <button
                   className="secondary-btn"
                   onClick={() => handleNavClick("AI Assistant")}
@@ -1444,6 +1666,20 @@ function App() {
               </div>
             </div>
           </section>
+        )}
+
+        {/* ========================================================
+            VIEW: PERSONAL INPUTS (USER'S OWN FINANCIAL TELEMETRY)
+           ======================================================== */}
+        {active === "Personal Inputs" && (
+          <PersonalInputs
+            inputs={personalInputs}
+            setInputs={setPersonalInputs}
+            currency={currency}
+            onApply={handleApplyPersonalInputs}
+            showToast={showToast}
+            formatMoney={formatMoney}
+          />
         )}
 
         {/* ========================================================
@@ -2016,6 +2252,13 @@ function App() {
                 <div className="prompt-suggestions-row">
                   <button
                     onClick={() =>
+                      handleSendMessage("Review my personal inputs and suggest an optimization plan")
+                    }
+                  >
+                    👤 Review my personal inputs
+                  </button>
+                  <button
+                    onClick={() =>
                       handleSendMessage("How can I save ₹10,000 more this month?")
                     }
                   >
@@ -2249,7 +2492,13 @@ function App() {
                     <input
                       type="text"
                       value={userName}
-                      onChange={(e) => setUserName(e.target.value)}
+                      onChange={(e) => {
+                        setUserName(e.target.value);
+                        setPersonalInputs((prev) => ({
+                          ...prev,
+                          fullName: e.target.value
+                        }));
+                      }}
                     />
                   </div>
                   <div className="form-field">
@@ -2257,7 +2506,13 @@ function App() {
                     <input
                       type="email"
                       value={userEmail}
-                      onChange={(e) => setUserEmail(e.target.value)}
+                      onChange={(e) => {
+                        setUserEmail(e.target.value);
+                        setPersonalInputs((prev) => ({
+                          ...prev,
+                          email: e.target.value
+                        }));
+                      }}
                     />
                   </div>
                 </div>
