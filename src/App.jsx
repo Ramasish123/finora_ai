@@ -66,6 +66,13 @@ const categorySpendData = [
 function App() {
   const [active, setActive] = useState("Dashboard");
   const [currency, setCurrency] = useState("₹");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Close sidebar when navigating on mobile
+  const handleNavClick = (name) => {
+    setActive(name);
+    setSidebarOpen(false);
+  };
 
   // Dynamic Transactions State
   const [transactions, setTransactions] = useState([
@@ -252,8 +259,16 @@ function App() {
 
   return (
     <div className="app">
+      {/* MOBILE OVERLAY */}
+      {sidebarOpen && (
+        <div
+          className="mobile-overlay active"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="brand">
           <div className="brand-icon">
             <ChartNoAxesCombined size={25} />
@@ -280,7 +295,7 @@ function App() {
               <button
                 key={item.name}
                 className={`nav-item ${active === item.name ? "active" : ""}`}
-                onClick={() => setActive(item.name)}
+                onClick={() => handleNavClick(item.name)}
               >
                 <Icon size={19} />
                 <span>{item.name}</span>
@@ -294,12 +309,12 @@ function App() {
             <Sparkles size={21} />
             <h4>Unlock smarter finance</h4>
             <p>Explore intelligent financial insights.</p>
-            <button onClick={() => setActive("AI Assistant")}>Explore AI</button>
+            <button onClick={() => handleNavClick("AI Assistant")}>Explore AI</button>
           </div>
 
           <button
             className={`nav-item ${active === "Settings" ? "active" : ""}`}
-            onClick={() => setActive("Settings")}
+            onClick={() => handleNavClick("Settings")}
           >
             <Settings size={19} />
             <span>Settings</span>
@@ -319,9 +334,18 @@ function App() {
       <main className="main">
         {/* TOPBAR */}
         <header className="topbar">
-          <div>
-            <div className="breadcrumb">Workspace / {active}</div>
-            <h1>{active}</h1>
+          <div className="topbar-left">
+            <button
+              className="mobile-menu-btn"
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label="Toggle menu"
+            >
+              <Menu size={20} />
+            </button>
+            <div>
+              <div className="breadcrumb">Workspace / {active}</div>
+              <h1>{active}</h1>
+            </div>
           </div>
 
           <div className="top-actions">
@@ -548,7 +572,7 @@ function App() {
                   </div>
                 </div>
 
-                <button className="ai-button" onClick={() => setActive("AI Assistant")}>
+                <button className="ai-button" onClick={() => handleNavClick("AI Assistant")}>
                   Open AI Assistant <ArrowUpRight size={17} />
                 </button>
               </div>
@@ -562,7 +586,7 @@ function App() {
                     <h3>Recent Transactions</h3>
                     <p>Your latest financial movements</p>
                   </div>
-                  <button className="text-btn" onClick={() => setActive("Transactions")}>
+                  <button className="text-btn" onClick={() => handleNavClick("Transactions")}>
                     View All →
                   </button>
                 </div>
